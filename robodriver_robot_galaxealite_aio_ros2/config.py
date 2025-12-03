@@ -1,0 +1,125 @@
+from typing import Dict
+from dataclasses import dataclass, field
+
+from lerobot.robots.config import RobotConfig
+from lerobot.cameras import CameraConfig
+from lerobot.cameras.opencv import OpenCVCameraConfig
+from lerobot.motors import Motor, MotorNormMode
+
+
+@RobotConfig.register_subclass("galaxealite-aio-ros2")
+@dataclass
+class GALAXEALITEAIORos2RobotConfig(RobotConfig):
+    use_degrees = True
+    norm_mode_body = (
+        MotorNormMode.DEGREES if use_degrees else MotorNormMode.RANGE_M100_100
+    )
+
+    leader_motors: Dict[str, Motor] = field(
+        default_factory=lambda norm_mode_body=norm_mode_body: {
+            "left_arm_joint_1_rad": Motor(1, "sts3215", norm_mode_body),
+            "left_arm_joint_2_rad": Motor(2, "sts3215", norm_mode_body),
+            "left_arm_joint_3_rad": Motor(3, "sts3215", norm_mode_body),
+            "left_arm_joint_4_rad": Motor(4, "sts3215", norm_mode_body),
+            "left_arm_joint_5_rad": Motor(5, "sts3215", norm_mode_body),
+            "left_arm_joint_6_rad": Motor(6, "sts3215", norm_mode_body),
+            "left_gripper_degree_mm": Motor(7, "sts3215", MotorNormMode.RANGE_0_100),
+            "right_arm_joint_1_rad": Motor(8, "sts3215", norm_mode_body),
+            "right_arm_joint_2_rad": Motor(9, "sts3215", norm_mode_body),
+            "right_arm_joint_3_rad": Motor(10, "sts3215", norm_mode_body),
+            "right_arm_joint_4_rad": Motor(11, "sts3215", norm_mode_body),
+            "right_arm_joint_5_rad": Motor(12, "sts3215", norm_mode_body),
+            "right_arm_joint_6_rad": Motor(13, "sts3215", norm_mode_body),
+            "right_gripper_degree_mm": Motor(14, "sts3215", MotorNormMode.RANGE_0_100),
+            "torso_joint_1":Motor(15, "sts3215", norm_mode_body),
+            "torso_joint_2":Motor(16, "sts3215", norm_mode_body),
+            "torso_joint_3":Motor(17, "sts3215", norm_mode_body),
+
+            # 左臂pose数据 (位置x,y,z + 四元数x,y,z,w)
+            "left_arm_pos_x": Motor(0, "sts3215", norm_mode_body),  
+            "left_arm_pos_y": Motor(1, "sts3215", norm_mode_body),
+            "left_arm_pos_z": Motor(2, "sts3215", norm_mode_body),
+            "left_arm_quat_x": Motor(3, "sts3215", norm_mode_body),
+            "left_arm_quat_y": Motor(4, "sts3215", norm_mode_body),
+            "left_arm_quat_z": Motor(5, "sts3215", norm_mode_body),
+            "left_arm_quat_w": Motor(6, "sts3215", norm_mode_body),
+            # 右臂pose数据
+            "right_arm_pos_x": Motor(7, "sts3215", norm_mode_body),
+            "right_arm_pos_y": Motor(8, "sts3215", norm_mode_body),
+            "right_arm_pos_z": Motor(9, "sts3215", norm_mode_body),
+            "right_arm_quat_x": Motor(10, "sts3215", norm_mode_body),
+            "right_arm_quat_y": Motor(11, "sts3215", norm_mode_body),
+            "right_arm_quat_z": Motor(12, "sts3215", norm_mode_body),
+            "right_arm_quat_w": Motor(13, "sts3215", norm_mode_body),
+            
+            # 躯干pose数据
+            "torso_pos_x": Motor(14, "sts3215", norm_mode_body),
+            "torso_pos_y": Motor(15, "sts3215", norm_mode_body),
+            "torso_pos_z": Motor(16, "sts3215", norm_mode_body),
+            "torso_quat_x": Motor(17, "sts3215", norm_mode_body),
+            "torso_quat_y": Motor(18, "sts3215", norm_mode_body),
+            "torso_quat_z": Motor(19, "sts3215", norm_mode_body),
+            "torso_quat_w": Motor(20, "sts3215", norm_mode_body),
+        }
+    )
+
+    follower_motors: Dict[str, Motor] = field(
+        default_factory=lambda norm_mode_body=norm_mode_body: {
+            "left_arm_joint_1_rad": Motor(1, "sts3215", norm_mode_body),
+            "left_arm_joint_2_rad": Motor(2, "sts3215", norm_mode_body),
+            "left_arm_joint_3_rad": Motor(3, "sts3215", norm_mode_body),
+            "left_arm_joint_4_rad": Motor(4, "sts3215", norm_mode_body),
+            "left_arm_joint_5_rad": Motor(5, "sts3215", norm_mode_body),
+            "left_arm_joint_6_rad": Motor(6, "sts3215", norm_mode_body),
+            "left_gripper_degree_mm": Motor(7, "sts3215", MotorNormMode.RANGE_0_100),
+            "right_arm_joint_1_rad": Motor(8, "sts3215", norm_mode_body),
+            "right_arm_joint_2_rad": Motor(9, "sts3215", norm_mode_body),
+            "right_arm_joint_3_rad": Motor(10, "sts3215", norm_mode_body),
+            "right_arm_joint_4_rad": Motor(11, "sts3215", norm_mode_body),
+            "right_arm_joint_5_rad": Motor(12, "sts3215", norm_mode_body),
+            "right_arm_joint_6_rad": Motor(13, "sts3215", norm_mode_body),
+            "right_gripper_degree_mm": Motor(14, "sts3215", MotorNormMode.RANGE_0_100),
+            "torso_joint_1":Motor(15, "sts3215", norm_mode_body),
+            "torso_joint_2":Motor(16, "sts3215", norm_mode_body),
+            "torso_joint_3":Motor(17, "sts3215", norm_mode_body),
+        }
+    )
+
+    cameras: Dict[str, CameraConfig] = field(
+        default_factory=lambda: {
+            "image_top_left": OpenCVCameraConfig(
+                camera_index=1,
+                fps=30,
+                width=1280,
+                height=720,
+                channels = 3,
+            ),
+            "image_top_right": OpenCVCameraConfig(
+                camera_index=2,
+                fps=30,
+                width=1280,
+                height=720,
+                channels = 3,
+                
+            ),
+            "image_wrist_left": OpenCVCameraConfig(
+                camera_index=3,
+                fps=30,
+                width=640,
+                height=360,
+                channels = 3,
+            ),
+            "image_wrist_right": OpenCVCameraConfig(
+                camera_index=4,
+                fps=30,
+                width=640,
+                height=360,
+                channels = 3,
+            ),
+        }
+    )
+
+    use_videos: bool = False
+
+    microphones: Dict[str, int] = field(default_factory=lambda: {})
+
