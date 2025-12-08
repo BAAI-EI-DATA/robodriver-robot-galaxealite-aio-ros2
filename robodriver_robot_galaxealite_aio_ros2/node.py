@@ -60,11 +60,11 @@ class GALAXEALITEAIORos2RobotNode(ROS2Node):
         self._init_image_message_filters()
 
         self.recv_images: Dict[str, float] = {}
-        self.recv_joint_leader: Dict[str, float] = {}
-        self.recv_joint_follower: Dict[str, float] = {}
+        self.recv_leader: Dict[str, float] = {}
+        self.recv_follower: Dict[str, float] = {}
         self.recv_images_status: Dict[str, int] = {}
-        self.recv_joint_leader_status: Dict[str, int] = {}
-        self.recv_joint_follower_status: Dict[str, int] = {}
+        self.recv_leader_status: Dict[str, int] = {}
+        self.recv_follower_status: Dict[str, int] = {}
 
         self.lock = threading.Lock()
 
@@ -101,8 +101,8 @@ class GALAXEALITEAIORos2RobotNode(ROS2Node):
            
             merged_data = np.concatenate([left_arm_data, gripper_left_pos, right_arm_data, gripper_right_pos, torso_pos])
             with self.lock:
-                self.recv_joint_follower['follower_arms'] = merged_data
-                self.recv_joint_follower_status['follower_arms'] = CONNECT_TIMEOUT_FRAME
+                self.recv_follower['follower_arms'] = merged_data
+                self.recv_follower_status['follower_arms'] = CONNECT_TIMEOUT_FRAME
         except Exception as e:
             self.get_logger().error(f"Synchronized follow callback error: {e}")
            
@@ -155,8 +155,8 @@ class GALAXEALITEAIORos2RobotNode(ROS2Node):
 
             merged_data = np.concatenate([left_joint, gripper_left_pose, right_joint, gripper_right_pose, torso_joint, left_pos, right_pos, torso_pose])
             with self.lock:
-                self.recv_joint_leader['leader_arms'] = merged_data
-                self.recv_joint_leader_status['leader_arms'] = CONNECT_TIMEOUT_FRAME
+                self.recv_leader['leader_arms'] = merged_data
+                self.recv_leader_status['leader_arms'] = CONNECT_TIMEOUT_FRAME
         except Exception as e:
             self.get_logger().error(f"Pose callback error: {e}")
 

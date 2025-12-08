@@ -17,6 +17,7 @@ class GALAXEALITEAIORos2RobotConfig(RobotConfig):
 
     leader_motors: Dict[str, Motor] = field(
         default_factory=lambda norm_mode_body=norm_mode_body: {
+            "leader_arms":{
             "left_arm_joint_1_rad": Motor(1, "sts3215", norm_mode_body),
             "left_arm_joint_2_rad": Motor(2, "sts3215", norm_mode_body),
             "left_arm_joint_3_rad": Motor(3, "sts3215", norm_mode_body),
@@ -61,10 +62,12 @@ class GALAXEALITEAIORos2RobotConfig(RobotConfig):
             "torso_quat_z": Motor(19, "sts3215", norm_mode_body),
             "torso_quat_w": Motor(20, "sts3215", norm_mode_body),
         }
+        }
     )
 
     follower_motors: Dict[str, Motor] = field(
         default_factory=lambda norm_mode_body=norm_mode_body: {
+            "follower_arms":{
             "left_arm_joint_1_rad": Motor(1, "sts3215", norm_mode_body),
             "left_arm_joint_2_rad": Motor(2, "sts3215", norm_mode_body),
             "left_arm_joint_3_rad": Motor(3, "sts3215", norm_mode_body),
@@ -82,6 +85,7 @@ class GALAXEALITEAIORos2RobotConfig(RobotConfig):
             "torso_joint_1":Motor(15, "sts3215", norm_mode_body),
             "torso_joint_2":Motor(16, "sts3215", norm_mode_body),
             "torso_joint_3":Motor(17, "sts3215", norm_mode_body),
+        }
         }
     )
 

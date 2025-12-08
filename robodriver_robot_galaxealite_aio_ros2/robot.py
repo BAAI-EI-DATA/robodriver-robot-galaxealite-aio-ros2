@@ -34,16 +34,16 @@ class GALAXEALITEAIORos2Robot(Robot):
         self.leader_motors = config.leader_motors
         self.follower_motors = config.follower_motors
         self.cameras = make_cameras_from_configs(self.config.cameras)
-
+        
         self.connect_excluded_cameras = ["image_pika_pose"]
 
         self.status = GALAXEALITEAIORos2RobotStatus()
         if not rclpy.ok():
             rclpy.init()
-        self.robot_ros_node = GALAXEALITEAIORos2RobotNode()  # 创建节点实例
+        self.robot_ros2_node = GALAXEALITEAIORos2RobotNode()  # 创建节点实例
         self.ros_spin_thread = threading.Thread(
             target=ros_spin_thread, 
-            args=(self.robot_ros_node,), 
+            args=(self.robot_ros2_node,), 
             daemon=True
         )
         self.ros_spin_thread.start()
@@ -52,12 +52,20 @@ class GALAXEALITEAIORos2Robot(Robot):
         self.logs = {}
 
     @property
-    def _leader_motors_ft(self) -> dict[str, type]:
-        return {f"leader_{motor}.pos": float for motor in self.leader_motors}
-
-    @property
     def _follower_motors_ft(self) -> dict[str, type]:
-        return {f"follower_{motor}.pos": float for motor in self.follower_motors}
+        return {
+            f"follower_{joint_name}.pos": float
+            for comp_name, joints in self.follower_motors.items()
+            for joint_name in joints.keys()
+        }
+    
+    @property
+    def _leader_motors_ft(self) -> dict[str, type]:
+        return {
+            f"leader_{joint_name}.pos": float
+            for comp_name, joints in self.leader_motors.items()
+            for joint_name in joints.keys()
+        }
 
     @property
     def _cameras_ft(self) -> dict[str, tuple]:
@@ -88,34 +96,34 @@ class GALAXEALITEAIORos2Robot(Robot):
         conditions = [
             (
                 lambda: all(
-                    name in self.robot_ros_node.recv_images
+                    name in self.robot_ros2_node.recv_images
                     for name in self.cameras
                     if name not in self.connect_excluded_cameras
                 ),
-                lambda: [name for name in self.cameras if name not in self.robot_ros_node.recv_images],
+                lambda: [name for name in self.cameras if name not in self.robot_ros2_node.recv_images],
                 "等待摄像头图像超时",
             ),
             (
                 lambda: all(
-                    any(name in key for key in self.robot_ros_node.recv_joint_leader)
+                    any(name in key for key in self.robot_ros2_node.recv_leader)
                     for name in self.leader_motors
                 ),
                 lambda: [
                     name
                     for name in self.leader_motors
-                    if not any(name in key for key in self.robot_ros_node.recv_joint_leader)
+                    if not any(name in key for key in self.robot_ros2_node.recv_leader)
                 ],
                 "等待主臂关节角度超时",
             ),
             (
                 lambda: all(
-                    any(name in key for key in self.robot_ros_node.recv_joint_follower)
+                    any(name in key for key in self.robot_ros2_node.recv_follower)
                     for name in self.follower_motors
                 ),
                 lambda: [
                     name
                     for name in self.follower_motors
-                    if not any(name in key for key in self.robot_ros_node.recv_joint_follower)
+                    if not any(name in key for key in self.robot_ros2_node.recv_follower)
                 ],
                 "等待从臂关节角度超时",
             ),
@@ -139,42 +147,43 @@ class GALAXEALITEAIORos2Robot(Robot):
             # 检查是否超时
             if time.perf_counter() - start_time > timeout:
                 failed_messages = []
-                for i in range(len(completed)):
-                    if not completed[i]:
-                        condition_func, get_missing, base_msg = conditions[i]
-                        missing = get_missing()
+                for i, (cond, get_missing, base_msg) in enumerate(conditions):
+                    if completed[i]:
+                        continue
 
-                        # 重新检查条件是否满足（可能刚好在最后一次检查后满足）
-                        if condition_func():
-                            completed[i] = True
-                            continue
+                    missing = get_missing()
+                    if cond() or not missing:
+                        completed[i] = True
+                        continue
 
-                        # 如果没有 missing，也视为满足
-                        if not missing:
-                            completed[i] = True
-                            continue
+                    if i == 0:
+                        received = [
+                            name
+                            for name in self.cameras
+                            if name not in missing
+                        ]
+                    elif i == 1:
+                        received = [
+                            name
+                            for name in self.leader_motors
+                            if name not in missing
+                        ]
+                    else:
+                        received = [
+                            name
+                            for name in self.follower_motors
+                            if name not in missing
+                        ]
 
-                        # 计算已接收的项
-                        if i == 0:
-                            received = [
-                                name for name in self.cameras if name not in missing
-                            ]
-                        else:
-                            received = [
-                                name
-                                for name in self.follower_motors
-                                if name not in missing
-                            ]
+                    msg = (
+                        f"{base_msg}: 未收到 [{', '.join(missing)}]; "
+                        f"已收到 [{', '.join(received)}]"
+                    )
+                    failed_messages.append(msg)
 
-                        # 构造错误信息
-                        msg = f"{base_msg}: 未收到 [{', '.join(missing)}]; 已收到 [{', '.join(received)}]"
-                        failed_messages.append(msg)
-
-                # 如果所有条件都已完成，break
                 if not failed_messages:
                     break
 
-                # 抛出超时异常
                 raise TimeoutError(
                     f"连接超时，未满足的条件: {'; '.join(failed_messages)}"
                 )
@@ -184,40 +193,32 @@ class GALAXEALITEAIORos2Robot(Robot):
 
         # ===== 新增成功打印逻辑 =====
         success_messages = []
-        # 摄像头连接状态
+
         if conditions[0][0]():
             cam_received = [
                 name
                 for name in self.cameras
-                if name in self.robot_ros_node.recv_images and name not in self.connect_excluded_cameras
+                if name in self.robot_ros2_node.recv_images
+                and name not in self.connect_excluded_cameras
             ]
             success_messages.append(f"摄像头: {', '.join(cam_received)}")
 
-        # 主臂数据状态
-        arm_data_types = [
-            "主臂关节角度",
-        ]
-        for i, data_type in enumerate(arm_data_types, 1):
-            if conditions[i][0]():
-                arm_received = [
-                    name
-                    for name in self.leader_motors
-                    if any(name in key for key in (self.robot_ros_node.recv_joint_leader,)[i - 1])
-                ]
-                success_messages.append(f"{data_type}: {', '.join(arm_received)}")
+        if conditions[1][0]():
+            leader_received = [
+                name
+                for name in self.leader_motors
+                if any(name in key for key in self.robot_ros2_node.recv_leader)
+            ]
+            success_messages.append(f"主臂数据: {', '.join(leader_received)}")
 
-        # 从臂数据状态
-        arm_data_types = [
-            "从臂关节角度",
-        ]
-        for i, data_type in enumerate(arm_data_types, 1):
-            if conditions[i][0]():
-                arm_received = [
-                    name
-                    for name in self.follower_motors
-                    if any(name in key for key in (self.robot_ros_node.recv_joint_follower,)[i - 1])
-                ]
-                success_messages.append(f"{data_type}: {', '.join(arm_received)}")
+        if conditions[2][0]():
+            follower_received = [
+                name
+                for name in self.follower_motors
+                if any(name in key for key in self.robot_ros2_node.recv_follower)
+            ]
+            success_messages.append(f"从臂数据: {', '.join(follower_received)}")
+
 
         log_message = "\n[连接成功] 所有设备已就绪:\n"
         log_message += "\n".join(f"  - {msg}" for msg in success_messages)
@@ -256,49 +257,43 @@ class GALAXEALITEAIORos2Robot(Robot):
     def get_observation(self) -> dict[str, Any]:
         if not self.connected:
             raise DeviceNotConnectedError(f"{self} is not connected.")
-        
-        with self.robot_ros_node.lock:
-            for key in self.robot_ros_node.recv_images_status:
-                self.robot_ros_node.recv_images_status[key] = max(0, self.robot_ros_node.recv_images_status[key] - 1)
-            for key in self.robot_ros_node.recv_joint_follower_status:
-                self.robot_ros_node.recv_joint_follower_status[key] = max(0, self.robot_ros_node.recv_joint_follower_status[key] - 1)
 
-            # Read arm position
-            start = time.perf_counter()
-            obs_dict = {
-                f"follower_{motor}.pos": val 
-                for name, val in self.robot_ros_node.recv_joint_follower.items() 
-                    for motor in self.follower_motors
-                        if motor in name
-            }
-            # Capture images from cameras
-            for cam_key, _cam in self.cameras.items():
-                start = time.perf_counter()
-                if cam_key in self.robot_ros_node.recv_images:
-                    obs_dict[cam_key] = self.robot_ros_node.recv_images[cam_key]
-                else:
-                    logger.warning(f"未获取到摄像头 {cam_key} 的数据")
+        start = time.perf_counter()
+        obs_dict: dict[str, Any] = {}
+        for comp_name, joints in self.follower_motors.items():
+            for follower_name, follower in self.robot_ros2_node.recv_follower.items():
+                if follower_name == comp_name:
+                    for i, joint_name in enumerate(joints.keys()):
+                        obs_dict[f"follower_{joint_name}.pos"] = float(follower[i])
 
         dt_ms = (time.perf_counter() - start) * 1e3
-        logger.debug(f"{self} read {cam_key}: {dt_ms:.1f} ms")
+        logger.debug(f"{self} read follower state: {dt_ms:.1f} ms")
+
+        # ---- 摄像头图像保持不变 ----
+        for cam_key, _cam in self.cameras.items():
+            start = time.perf_counter()
+            for name, val in self.robot_ros2_node.recv_images.items():
+                if cam_key == name or cam_key in name:
+                    obs_dict[cam_key] = val
+                    break
+            dt_ms = (time.perf_counter() - start) * 1e3
+            logger.debug(f"{self} read {cam_key}: {dt_ms:.1f} ms")
+
         return obs_dict
     
     def get_action(self) -> dict[str, Any]:
         if not self.connected:
             raise DeviceNotConnectedError(f"{self} is not connected.")
-        
-        with self.robot_ros_node.lock:
-            for key in self.robot_ros_node.recv_joint_leader_status:
-                self.robot_ros_node.recv_joint_leader_status[key] = max(0, self.robot_ros_node.recv_joint_leader_status[key] - 1)
-            
-            # Read arm position
-            start = time.perf_counter()
-            act_dict = {
-                f"leader_{motor}.pos": val 
-                for name, val in self.robot_ros_node.recv_joint_leader.items() 
-                    for motor in self.leader_motors
-                        if motor in name
-            }
+
+        start = time.perf_counter()
+        act_dict: dict[str, Any] = {}
+
+        for comp_name, joints in self.leader_motors.items():
+            for follower_name, follower in self.robot_ros2_node.recv_leader.items():
+                if follower_name == comp_name:
+                    for i, joint_name in enumerate(joints.keys()):
+                        act_dict[f"leader_{joint_name}.pos"] = float(follower[i])
+
         dt_ms = (time.perf_counter() - start) * 1e3
         logger.debug(f"{self} read action: {dt_ms:.1f} ms")
 
@@ -317,7 +312,7 @@ class GALAXEALITEAIORos2Robot(Robot):
                 raise ValueError(f"Action vector must be 38-dimensional, got {goal_joint_numpy.shape[0]}")
             
             # 调用ROS2节点的ros_replay方法发布动作
-            self.robot_ros_node.ros_replay(goal_joint_numpy)
+            self.robot_ros2_node.ros_replay(goal_joint_numpy)
             
         except Exception as e:
             logger.error(f"Failed to send action: {e}")
@@ -326,26 +321,26 @@ class GALAXEALITEAIORos2Robot(Robot):
     def update_status(self) -> str:
         for i in range(self.status.specifications.camera.number):
             match_name = self.status.specifications.camera.information[i].name
-            for name in self.robot_ros_node.recv_images_status:
+            for name in self.robot_ros2_node.recv_images_status:
                 if match_name in name:
                     self.status.specifications.camera.information[i].is_connect = (
-                        True if self.robot_ros_node.recv_images_status[name] > 0 else False
+                        True if self.robot_ros2_node.recv_images_status[name] > 0 else False
                     )
 
         for i in range(self.status.specifications.arm.number):
             match_name = self.status.specifications.arm.information[i].name
-            for name in self.robot_ros_node.recv_joint_leader_status:
+            for name in self.robot_ros2_node.recv_leader_status:
                 if match_name in name:
                     self.status.specifications.arm.information[i].is_connect = (
-                        True if self.robot_ros_node.recv_joint_leader_status[name] > 0 else False
+                        True if self.robot_ros2_node.recv_leader_status[name] > 0 else False
                     )
 
         for i in range(self.status.specifications.arm.number):
             match_name = self.status.specifications.arm.information[i].name
-            for name in self.robot_ros_node.recv_joint_follower_status:
+            for name in self.robot_ros2_node.recv_follower_status:
                 if match_name in name:
                     self.status.specifications.arm.information[i].is_connect = (
-                        True if self.robot_ros_node.recv_joint_follower_status[name] > 0 else False
+                        True if self.robot_ros2_node.recv_follower_status[name] > 0 else False
                     )
 
         return self.status.to_json()
@@ -356,7 +351,7 @@ class GALAXEALITEAIORos2Robot(Robot):
                 "robot is not connected. You need to run `robot.connect()` before disconnecting."
             )
         if hasattr(self, "ros_node"):
-            self.robot_ros_node.destroy()
+            self.robot_ros2_node.destroy()
         if rclpy.ok():
             rclpy.shutdown()
 
