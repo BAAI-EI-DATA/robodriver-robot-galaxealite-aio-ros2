@@ -1,0 +1,2 @@
+lerobot_robot_galaxealite_aio_ros2
+robodriver_robot_galaxealite_aio_ros2
