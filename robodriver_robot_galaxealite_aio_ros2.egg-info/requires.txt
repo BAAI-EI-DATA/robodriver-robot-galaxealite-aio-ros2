@@ -1,3 +1,0 @@
-dora-rs-cli
-logging_mp
-opencv-python
